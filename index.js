@@ -1,106 +1,114 @@
-const Encoder = require('gif-encoder-2')
-const Canvas = require('canvas')
+const { createCanvas, loadImage, Image } = require("canvas");
+const Encoder = require("gif-encoder-2");
 
-const data = require('./data.json').children.map(layer => layer.children.map(path => path.attributes.d))
-const shading = require('./shading.json')
+const shading = require("./shading.json");
+const data = require("./data.json");
 
 data.forEach(layer => {
-  layer.reverse()
-  layer.base = layer.pop()
-  layer.mask = layer.pop()
-})
+  layer.reverse();
+  layer.base = layer.pop();
+  layer.mask = layer.pop();
+});
 
 shading.forEach((layer, index) => {
-  for (i = 0; i < layer; i++) {
-    let str = new String(data[index][i])
-    str.shading = true
-    data[index].push(str)
+  for (let i = 0; i < layer; i++) {
+    const str = new String(data[index][i]);
+    str.shading = true;
+    data[index].push(str);
   }
-})
+});
 
-function path(path, color) {
-  if (path.shading) color = color.map(int => Math.round(int / 1.5))
-  return '<path fill="rgb(' + color + ')" d="' + path + '"/>'
+function path(d, color) {
+  if (d.shading) color = color.map(int => Math.round(int / 1.5));
+  return `<path fill="rgb(${color.join(',')})" d="${d}"/>`;
 }
 
-function build(layer, color) {
-  let base = path(layer.base, [0, 0, 0])
-  let mask = path(layer.mask, [149, 201, 218])
+function buildLayerSVG(layer, color) {
+  const basePath = path(layer.base, [0, 0, 0]);
+  const maskPath = path(layer.mask, [149, 201, 218]);
+  const layerPaths = layer.map(d => path(d, color)).join('');
 
-  return 'data:image/svg+xml;charset=utf-8,<svg viewBox="0 0 128 128" width="128" height="128" xmlns="http://www.w3.org/2000/svg">' + base + mask + layer.map(d => path(d, color)).join('') + '</svg>'
+  return `data:image/svg+xml;charset=utf-8,<svg viewBox="0 0 128 128" width="128" height="128" xmlns="http://www.w3.org/2000/svg">${basePath}${maskPath}${layerPaths}</svg>`;
 }
 
-function loop(arr, num) {
-  if (num > arr.length - 1) return loop(arr, -arr.length + num)
-  if (num < 0) return loop(arr, arr.length - num)
-  return num
+function loopIndex(arr, num) {
+  return (num + arr.length) % arr.length;
 }
 
-async function getData(image, size) {
-  const canvas = Canvas.createCanvas(size, size)
-  const ctx = canvas.getContext('2d')
+async function getImageData(image, size) {
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext('2d');
 
-  image = await Canvas.loadImage(image)
-  ctx.drawImage(image, 0, 0, size, size)
-  return ctx.getImageData(0, 0, size, size).data
+  try {
+    const img = await loadImage(image);
+    ctx.drawImage(img, 0, 0, size, size);
+    return ctx.getImageData(0, 0, size, size).data;
+  } catch (error) {
+    console.error("Error loading image:", error);
+    throw error;
+  }
 }
 
-module.exports = function (image, { size = 10, resolution = 1080, speed = 10 } = { size: 10, resolution: 1080, speed: 10 }) {
-  const imgSize = resolution / size
+module.exports = async (image, { size = 10, resolution = 1080, speed = 10 } = {}) => {
+  const imgSize = resolution / size;
 
-  return getData(image, size)
-    .then(async pixels => {
-      const pixelLength = pixels.length
-      const gif = new Encoder(resolution, resolution)
+  try {
+    const pixels = await getImageData(image, size);
+    const pixelLength = pixels.length;
+    const gif = new Encoder(resolution, resolution);
 
-      gif.setTransparent(0)
-      gif.setDelay(speed)
-      gif.start()
+    gif.setTransparent(0);
+    gif.setDelay(speed);
+    gif.start();
 
-      const canvas = Canvas.createCanvas(resolution, resolution)
-      const ctx = canvas.getContext('2d')
+    const canvas = createCanvas(resolution, resolution);
+    const ctx = canvas.getContext('2d');
 
-      async function generate(frame) {
-        let res = []
-        let x = 0;
-        let y = 0;
+    async function generateFrame(frame) {
+      const promises = [];
+      let x = 0;
+      let y = 0;
 
-        for (i = 0; i < pixelLength; i += 4) {
-          const [r, g, b, a] = pixels.slice(i)
+      for (let i = 0; i < pixelLength; i += 4) {
+        const [r, g, b, a] = pixels.slice(i, i + 4);
 
-          if (a > 125) {
-            const image = new Canvas.Image()
-            const promise = new Promise(resolve => {
-              image.onload = () => {
-                resolve()
-                ctx.drawImage(image, x * imgSize, y * imgSize, imgSize * 2, imgSize * 2)
-              }
-            })
+        if (a > 125) {
+          const img = new Image();
+          const promise = new Promise(resolve => {
+            img.onload = () => {
+              resolve();
+              ctx.drawImage(img, x * imgSize, y * imgSize, imgSize * 2, imgSize * 2);
+            };
+          });
 
-            res.push(promise)
+          promises.push(promise);
 
-            let offset = i / 4 % data.length
-            const svg = build(data[loop(data, offset + frame)], [r, g, b])
-            image.src = svg
-          }
-
-          x++
-          if (x === size) {
-            x = 0
-            y++
-          }
+          const offset = i / 4 % data.length;
+          const svg = buildLayerSVG(data[loopIndex(data, offset + frame)], [r, g, b]);
+          img.src = svg;
         }
 
-        return Promise.all(res).then(() => ctx)
+        x++;
+        if (x === size) {
+          x = 0;
+          y++;
+        }
       }
 
-      for (f = 0; f < data.length; f++) {
-        const frame = await generate(f)
-        gif.addFrame(frame)
-        ctx.clearRect(0, 0, resolution, resolution)
-      }
+      await Promise.all(promises);
+      return ctx;
+    }
 
-      gif.finish()
-      return gif.out.getData()
-    })
-}
+    for (let f = 0; f < data.length; f++) {
+      const frame = await generateFrame(f);
+      gif.addFrame(frame);
+      ctx.clearRect(0, 0, resolution, resolution);
+    }
+
+    gif.finish();
+    return gif.out.getData();
+  } catch (error) {
+    console.error("Error generating GIF:", error);
+    throw error;
+  }
+};

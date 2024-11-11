@@ -1,20 +1,23 @@
 {
   "name": "dumpy",
-  "version": "1.0.6",
-  "description": "",
+  "version": "1.0.0",
+  "description": "A package to create 'dumpy amongus' gifs",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Commandtechno/dumpy.git"
+    "url": "git+https://github.com/ForkPrince/dumpy.git"
   },
-  "keywords": [],
-  "author": "",
+  "author": "Prince527, Commandtechno",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ForkPrince/dumpy/issues"
+  },
+  "homepage": "https://github.com/ForkPrince/dumpy#readme",
   "dependencies": {
-    "canvas": "^2.8.0",
+    "canvas": "^2.11.2",
     "gif-encoder-2": "^1.0.5"
   }
 }
