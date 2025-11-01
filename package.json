@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/ForkPrince/dumpy#readme",
   "dependencies": {
-    "canvas": "^2.11.2",
+    "canvas": "^3.2.0",
     "gif-encoder-2": "^1.0.5"
   }
 }

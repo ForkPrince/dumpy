@@ -1,4 +1,4 @@
-const { createCanvas, loadImage, Image } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 const Encoder = require("gif-encoder-2");
 
 const shading = require("./shading.json");
@@ -73,19 +73,16 @@ module.exports = async (image, { size = 10, resolution = 1080, speed = 10 } = {}
         const [r, g, b, a] = pixels.slice(i, i + 4);
 
         if (a > 125) {
-          const img = new Image();
-          const promise = new Promise(resolve => {
-            img.onload = () => {
-              resolve();
-              ctx.drawImage(img, x * imgSize, y * imgSize, imgSize * 2, imgSize * 2);
-            };
-          });
+          const currentX = x;
+          const currentY = y;
+          const promise = (async () => {
+            const offset = i / 4 % data.length;
+            const svg = buildLayerSVG(data[loopIndex(data, offset + frame)], [r, g, b]);
+            const img = await loadImage(svg);
+            ctx.drawImage(img, currentX * imgSize, currentY * imgSize, imgSize * 2, imgSize * 2);
+          })();
 
           promises.push(promise);
-
-          const offset = i / 4 % data.length;
-          const svg = buildLayerSVG(data[loopIndex(data, offset + frame)], [r, g, b]);
-          img.src = svg;
         }
 
         x++;
